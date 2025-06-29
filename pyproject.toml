@@ -1,0 +1,16 @@
+[project]
+name = "pycharmmiscproject"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "hydra-zen>=0.10.0",
+    "loguru>=0.7.0",
+    "peer-pytorch>=0.2.1",
+    "python-dotenv>=1.0.0",
+    "pytorch-lightning>=2.0.0",
+    "torch>=2.0.0",
+    "transformers>=4.36.0",
+    "wandb>=0.16.0",
+]

@@ -1,0 +1,8 @@
+torch>=2.0.0
+pytorch-lightning>=2.0.0
+transformers>=4.36.0
+PEER-pytorch
+hydra-zen>=0.10.0
+wandb>=0.16.0
+loguru>=0.7.0
+python-dotenv>=1.0.0
