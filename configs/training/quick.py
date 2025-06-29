@@ -1,9 +1,8 @@
-"""Quick training configuration for testing"""
-from hydra_zen import builds
+# configs/training/quick.py
+"""Quick training configuration for testing - using direct dataclass instances"""
 from configs.config_schema import TrainingConfig
 
-quick_training = builds(
-    TrainingConfig,
+quick_training = TrainingConfig(
     max_epochs=3,
     learning_rate=1e-3,
     weight_decay=0.01,
@@ -13,5 +12,4 @@ quick_training = builds(
     gradient_clip_val=1.0,
     val_check_interval=0.5,
     limit_val_batches=20,
-    populate_full_signature=True
 )

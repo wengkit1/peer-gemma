@@ -53,7 +53,15 @@ class PEERGemmaLightningModule(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-
+        if self.hparams.peer_enabled:
+            total_active_experts = self.hparams.peer_heads * self.hparams.peer_num_experts_per_head
+            if total_active_experts > self.hparams.peer_num_experts:
+                logger.warning(
+                    f"Active experts ({total_active_experts}) > total experts ({self.hparams.peer_num_experts})")
+                # Automatically fix the configuration
+                adjusted_experts_per_head = max(1, self.hparams.peer_num_experts // self.hparams.peer_heads)
+                logger.info(f"Adjusting experts_per_head to {adjusted_experts_per_head}")
+                self.hparams.peer_num_experts_per_head = adjusted_experts_per_head
         # Create model
         self.model = self._create_model()
 

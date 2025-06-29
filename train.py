@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Main training script for PEER Gemma with Hydra-Zen configuration management
+FINAL FIXED training script using hydra-zen correctly
+No more ValidationError - uses proper dataclass instances
 """
 import os
 import torch
@@ -8,7 +9,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 import wandb
-from hydra_zen import make_config, store, zen
 from pathlib import Path
 from loguru import logger
 import sys
@@ -18,14 +18,15 @@ from setup_env import setup_environment
 
 setup_environment()
 
-# Import our modules
-from data.mock_data import MockDataModule
-from models.peer_gemma_lightning import PEERGemmaLightningModule
-from configs.config_schema import Config, MainConfig
+# Import hydra-zen components
+from hydra_zen import zen, store
 
-# Import all config variants
-from configs.model.small import small_model
+# Import our config schema and instances
+from configs.config_schema import Config, ModelConfig, DataConfig, TrainingConfig, ExperimentConfig, SystemConfig
+
+# Import all config instances (these are now proper dataclass instances)
 from configs.model.tiny import tiny_model
+from configs.model.small import small_model
 from configs.data.mock import mock_data
 from configs.data.tiny import tiny_data
 from configs.training.quick import quick_training
@@ -35,10 +36,14 @@ from configs.experiment.dev import dev_experiment
 from configs.system.mac import mac_system
 from configs.system.cpu import cpu_system
 
-# Store configurations - do this at module level, not in main
+# Import our modules
+from data.mock_data import create_smart_data_module
+from models.peer_gemma_lightning import PEERGemmaLightningModule
+
+# Create store and add all configs
 cs = store(group="model")
-cs(small_model, name="small")
 cs(tiny_model, name="tiny")
+cs(small_model, name="small")
 
 cs = store(group="data")
 cs(mock_data, name="mock")
@@ -56,9 +61,31 @@ cs = store(group="system")
 cs(mac_system, name="mac")
 cs(cpu_system, name="cpu")
 
-# Store main config
+# Create main config with proper defaults list for Hydra
+from hydra_zen import builds
+from omegaconf import MISSING
+
+# Create the main config with hydra defaults
+main_config = builds(
+    Config,
+    model=MISSING,  # Will be filled by defaults
+    data=MISSING,  # Will be filled by defaults
+    training=MISSING,  # Will be filled by defaults
+    experiment=MISSING,  # Will be filled by defaults
+    system=MISSING,  # Will be filled by defaults
+    hydra_defaults=[
+        "_self_",  # This config itself
+        {"model": "tiny"},  # Default to tiny model
+        {"data": "mock"},  # Default to mock data
+        {"training": "quick"},  # Default to quick training
+        {"experiment": "test"},  # Default to test experiment
+        {"system": "mac"}  # Default to mac system
+    ]
+)
+
+# Store the main config
 cs = store()
-cs(MainConfig, name="config")
+cs(main_config, name="config")
 
 
 def setup_logging(experiment_config):
@@ -83,24 +110,30 @@ def setup_logging(experiment_config):
 
 def setup_wandb(experiment_config):
     """Setup Weights & Biases logging"""
+    # Check if wandb is available and configured
+    if not os.getenv("WANDB_API_KEY"):
+        logger.info("🔕 WANDB_API_KEY not found, skipping wandb logging")
+        return None
+
     try:
-        # Initialize wandb
+        # Debug info
+        import wandb
+        logger.info(f"🔍 Wandb user: {wandb.api.default_entity}")
+        logger.info(f"🔍 Trying to create/use project: {experiment_config.wandb_project}")
+
         wandb_logger = WandbLogger(
             project=experiment_config.wandb_project,
-            entity=experiment_config.wandb_entity,
             name=experiment_config.run_name,
             tags=experiment_config.wandb_tags,
             notes=experiment_config.wandb_notes,
             save_dir=experiment_config.output_dir,
+            entity=os.getenv("WANDB_ENTITY"),
         )
-
-        logger.success("✅ Wandb logger initialized")
+        logger.success(f"✅ Wandb logger initialized for project: {experiment_config.wandb_project}")
         return wandb_logger
-
     except Exception as e:
-        logger.error(f"❌ Failed to initialize wandb: {e}")
-        logger.info("💡 Make sure WANDB_API_KEY is set in your environment")
-        logger.info("💡 Run: wandb login")
+        logger.warning(f"⚠️ Failed to initialize wandb: {e}")
+        logger.info("🔕 Continuing without wandb logging")
         return None
 
 
@@ -108,7 +141,6 @@ def create_callbacks(experiment_config):
     """Create Lightning callbacks"""
     callbacks = []
 
-    # Model checkpoint callback
     checkpoint_callback = ModelCheckpoint(
         dirpath=experiment_config.checkpoint_dir,
         filename=f"{experiment_config.experiment_name}_{{epoch:02d}}_{{val_loss:.3f}}",
@@ -120,7 +152,6 @@ def create_callbacks(experiment_config):
     )
     callbacks.append(checkpoint_callback)
 
-    # Early stopping callback
     early_stopping = EarlyStopping(
         monitor=experiment_config.monitor_metric,
         mode=experiment_config.monitor_mode,
@@ -130,7 +161,6 @@ def create_callbacks(experiment_config):
     )
     callbacks.append(early_stopping)
 
-    # Learning rate monitor
     lr_monitor = LearningRateMonitor(logging_interval="step")
     callbacks.append(lr_monitor)
 
@@ -155,8 +185,9 @@ def validate_config(cfg):
 
     # Check PEER configuration
     if cfg.model.peer_enabled:
-        if cfg.model.peer_heads * cfg.model.peer_num_experts_per_head > cfg.model.peer_num_experts:
-            logger.warning("PEER active experts may exceed total experts")
+        total_active = cfg.model.peer_heads * cfg.model.peer_num_experts_per_head
+        if total_active > cfg.model.peer_num_experts:
+            logger.warning(f"PEER active experts ({total_active}) > total experts ({cfg.model.peer_num_experts})")
 
     # Create output directories
     Path(cfg.experiment.output_dir).mkdir(parents=True, exist_ok=True)
@@ -165,109 +196,129 @@ def validate_config(cfg):
     logger.success("✅ Configuration validated")
 
 
-def main(cfg: Config) -> None:
-    """Main training function"""
+# The function signature matches the main config structure
+def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
+               experiment: ExperimentConfig, system: SystemConfig):
+    """
+    Main training function - zen extracts these from the config automatically
+    """
 
-    # Setup
-    setup_logging(cfg.experiment)
+    # Setup logging
+    setup_logging(experiment)
+
+    # Build config for validation
+    cfg = Config(
+        model=model,
+        data=data,
+        training=training,
+        experiment=experiment,
+        system=system
+    )
+
     validate_config(cfg)
 
     logger.info("🚀 Starting PEER Gemma training")
-    logger.info(f"📋 Experiment: {cfg.experiment.experiment_name}")
-    logger.info(f"🏃 Run: {cfg.experiment.run_name}")
+    logger.info(f"📋 Experiment: {experiment.experiment_name}")
+    logger.info(f"🎯 Model: {model.hidden_size}d, {model.num_layers} layers")
+    logger.info(f"📊 Data: {data.num_samples} samples, batch_size={data.batch_size}")
 
     # Set random seed
-    pl.seed_everything(cfg.experiment.seed, workers=True)
+    pl.seed_everything(experiment.seed, workers=True)
 
     # Setup wandb
-    wandb_logger = setup_wandb(cfg.experiment)
+    wandb_logger = setup_wandb(experiment)
 
     # Create data module
     logger.info("📊 Creating data module...")
-    from data.mock_data import create_smart_data_module
-
     data_module = create_smart_data_module(
-        num_samples=cfg.data.num_samples,
-        sequence_length=cfg.data.sequence_length,
-        vocab_size=cfg.data.vocab_size,
-        batch_size=cfg.data.batch_size,
-        patterns=cfg.data.mock_patterns,
-        seed=cfg.data.mock_data_seed,
-        # Platform-optimized settings will be auto-detected
+        num_samples=data.num_samples,
+        sequence_length=data.sequence_length,
+        vocab_size=data.vocab_size,
+        batch_size=data.batch_size,
+        patterns=data.mock_patterns,
+        seed=data.mock_data_seed,
     )
 
     # Create model
     logger.info("🤖 Creating model...")
-    model = PEERGemmaLightningModule(
+    model_module = PEERGemmaLightningModule(
         # Model config
-        hidden_size=cfg.model.hidden_size,
-        num_layers=cfg.model.num_layers,
-        num_heads=cfg.model.num_heads,
-        intermediate_size=cfg.model.intermediate_size,
-        vocab_size=cfg.model.vocab_size,
-        max_position_embeddings=cfg.model.max_position_embeddings,
+        hidden_size=model.hidden_size,
+        num_layers=model.num_layers,
+        num_heads=model.num_heads,
+        intermediate_size=model.intermediate_size,
+        vocab_size=model.vocab_size,
+        max_position_embeddings=model.max_position_embeddings,
 
         # PEER config
-        replace_layers=cfg.model.replace_layers,
-        peer_enabled=cfg.model.peer_enabled,
-        peer_num_experts=cfg.model.peer_num_experts,
-        peer_heads=cfg.model.peer_heads,
-        peer_num_experts_per_head=cfg.model.peer_num_experts_per_head,
-        peer_dim_key=cfg.model.peer_dim_key,
-        peer_pre_rmsnorm=cfg.model.peer_pre_rmsnorm,
+        replace_layers=model.replace_layers,
+        peer_enabled=model.peer_enabled,
+        peer_num_experts=model.peer_num_experts,
+        peer_heads=model.peer_heads,
+        peer_num_experts_per_head=model.peer_num_experts_per_head,
+        peer_dim_key=model.peer_dim_key,
+        peer_pre_rmsnorm=model.peer_pre_rmsnorm,
 
         # Training config
-        learning_rate=cfg.training.learning_rate,
-        weight_decay=cfg.training.weight_decay,
-        beta1=cfg.training.beta1,
-        beta2=cfg.training.beta2,
-        eps=cfg.training.eps,
-        scheduler_type=cfg.training.scheduler_type,
-        warmup_steps=cfg.training.warmup_steps,
-        min_lr_ratio=cfg.training.min_lr_ratio,
-        max_epochs=cfg.training.max_epochs,
+        learning_rate=training.learning_rate,
+        weight_decay=training.weight_decay,
+        beta1=training.beta1,
+        beta2=training.beta2,
+        eps=training.eps,
+        scheduler_type=training.scheduler_type,
+        warmup_steps=training.warmup_steps,
+        min_lr_ratio=training.min_lr_ratio,
+        max_epochs=training.max_epochs,
     )
 
     # Create callbacks
-    callbacks = create_callbacks(cfg.experiment)
+    callbacks = create_callbacks(experiment)
 
     # Create trainer
     logger.info("⚡ Creating trainer...")
     trainer = pl.Trainer(
-        max_epochs=cfg.training.max_epochs,
-        accelerator=cfg.system.accelerator,
-        devices=cfg.system.devices,
-        precision=cfg.training.precision,
-        gradient_clip_val=cfg.training.gradient_clip_val,
-        accumulate_grad_batches=cfg.training.accumulate_grad_batches,
-        val_check_interval=cfg.training.val_check_interval,
-        limit_val_batches=cfg.training.limit_val_batches,
+        max_epochs=training.max_epochs,
+        accelerator=system.accelerator,
+        devices=system.devices,
+        precision=training.precision,
+        gradient_clip_val=training.gradient_clip_val,
+        accumulate_grad_batches=training.accumulate_grad_batches,
+        val_check_interval=training.val_check_interval,
+        limit_val_batches=training.limit_val_batches,
         logger=wandb_logger,
         callbacks=callbacks,
         enable_progress_bar=True,
         enable_model_summary=True,
         deterministic=True,
-        log_every_n_steps=cfg.experiment.log_every_n_steps,
+        log_every_n_steps=experiment.log_every_n_steps,
     )
 
-    # Log configuration to wandb
+    # Log configuration to wandb (only if wandb is available)
     if wandb_logger:
-        wandb_logger.experiment.config.update({
-            "model": cfg.model,
-            "data": cfg.data,
-            "training": cfg.training,
-            "system": cfg.system
-        })
+        try:
+            wandb_logger.experiment.config.update({
+                "model_hidden_size": model.hidden_size,
+                "model_num_layers": model.num_layers,
+                "peer_num_experts": model.peer_num_experts,
+                "training_lr": training.learning_rate,
+                "training_epochs": training.max_epochs,
+                "data_batch_size": data.batch_size,
+            })
+            logger.info("✅ Config logged to wandb")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to log config to wandb: {e}")
+            # Continue without wandb
+            wandb_logger = None
 
     # Train model
     logger.info("🎯 Starting training...")
     try:
-        trainer.fit(model, data_module)
+        trainer.fit(model_module, data_module)
         logger.success("🎉 Training completed successfully!")
 
         # Test model
         logger.info("🧪 Running test...")
-        trainer.test(model, data_module)
+        trainer.test(model_module, data_module)
 
     except Exception as e:
         logger.error(f"❌ Training failed: {e}")
@@ -280,54 +331,13 @@ def main(cfg: Config) -> None:
         logger.info("🧹 Cleanup completed")
 
 
-def quick_test():
-    """Quick test function"""
-    logger.info("🔬 Running quick test...")
-
-    # Create test config by instantiating the components
-    from hydra_zen import instantiate
-
-    test_cfg = Config(
-        model=instantiate(tiny_model),
-        data=instantiate(tiny_data),
-        training=instantiate(quick_training),
-        experiment=instantiate(test_experiment),
-        system=instantiate(mac_system)
-    )
-
-    # Modify for very quick test
-    test_cfg.training.max_epochs = 1
-    test_cfg.data.num_samples = 50
-    test_cfg.training.limit_val_batches = 5
-    test_cfg.experiment.log_every_n_steps = 1
-
-    try:
-        main(test_cfg)
-        logger.success("✅ Quick test passed!")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Quick test failed: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-
 if __name__ == "__main__":
-    # Check if we want to run quick test
-    if len(sys.argv) > 1 and sys.argv[1] == "--quick-test":
-        quick_test()
-    else:
-        # Create config directly from our stored components
-        from hydra_zen import instantiate
+    # Add configs to hydra store
+    store.add_to_hydra_store()
 
-        # Instantiate default config
-        cfg = Config(
-            model=instantiate(tiny_model),
-            data=instantiate(mock_data),
-            training=instantiate(quick_training),
-            experiment=instantiate(test_experiment),
-            system=instantiate(mac_system)
-        )
-
-        # Run main with the config
-        main(cfg)
+    # Use zen decorator to create CLI
+    zen(train_task).hydra_main(
+        config_path=None,
+        config_name="config",
+        version_base="1.1"
+    )

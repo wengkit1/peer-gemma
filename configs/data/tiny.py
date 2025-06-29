@@ -1,10 +1,8 @@
-"""Tiny data for quick testing"""
-from hydra_zen import builds
-
+# configs/data/tiny.py
+"""Tiny data for quick testing - using direct dataclass instances"""
 from configs.config_schema import DataConfig
 
-tiny_data = builds(
-    DataConfig,
+tiny_data = DataConfig(
     sequence_length=64,
     vocab_size=1000,
     batch_size=2,
@@ -12,5 +10,4 @@ tiny_data = builds(
     use_mock_data=True,
     mock_data_seed=42,
     mock_patterns=["repeat", "arithmetic"],
-    populate_full_signature=True
 )
