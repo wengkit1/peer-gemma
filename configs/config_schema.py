@@ -48,7 +48,6 @@ class DataConfig:
     def __post_init__(self):
         if self.mock_patterns is None:
             self.mock_patterns = [
-                "real_data",
                 "repeat",  # Repeating sequences
                 "arithmetic",  # Simple arithmetic patterns
                 "random",  # Random sequences
