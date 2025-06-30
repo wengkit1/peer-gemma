@@ -4,7 +4,7 @@ FINAL FIXED training script using hydra-zen correctly
 No more ValidationError - uses proper dataclass instances
 """
 import os
-import torch
+
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
@@ -29,7 +29,7 @@ from configs.model.tiny import tiny_model
 from configs.model.small import small_model
 from configs.data.mock import mock_data
 from configs.data.tiny import tiny_data
-from configs.data.c4_data import c4_data
+from configs.data.c4 import c4_data
 from configs.training.quick import quick_training
 from configs.training.full import full_training
 from configs.experiment.test import test_experiment
