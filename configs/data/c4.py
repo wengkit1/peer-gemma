@@ -1,5 +1,4 @@
 """Real data configuration for actual datasets"""
-from hydra_zen import builds
 from configs.config_schema import DataConfig
 c4_data = DataConfig(
     sequence_length=256,
@@ -14,4 +13,4 @@ c4_data = DataConfig(
 
     mock_data_seed=42,
     mock_patterns=["real_data"],
-        )
+    )

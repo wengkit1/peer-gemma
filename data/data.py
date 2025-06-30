@@ -1,4 +1,3 @@
-# File: data/real_data.py
 """
 Real data loading module for PEER Gemma training on NSCC
 Uses HuggingFace datasets - NO tokenization here, model handles it
