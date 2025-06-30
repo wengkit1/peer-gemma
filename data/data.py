@@ -268,8 +268,8 @@ def test_data():
     try:
         # Test with small dataset
         data_module = create_data_module(
-            dataset_name='wikitext',
-            dataset_config='wikitext-2-raw-v1',
+            dataset_name='c4',
+            dataset_config='en',
             sequence_length=128,
             batch_size=2,
             num_samples=100,
