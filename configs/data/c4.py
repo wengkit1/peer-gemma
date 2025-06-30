@@ -1,8 +1,7 @@
 """Real data configuration for actual datasets"""
 from hydra_zen import builds
 from configs.config_schema import DataConfig
-c4_data = builds(
-    DataConfig,
+c4_data = DataConfig(
     sequence_length=256,
     vocab_size=256000,
     batch_size=4,
@@ -15,6 +14,4 @@ c4_data = builds(
 
     mock_data_seed=42,
     mock_patterns=["real_data"],
-
-    populate_full_signature=True
-)
+        )
