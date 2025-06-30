@@ -12,8 +12,5 @@ c4_data = DataConfig(
     tokenizer_name="google/gemma-2b",
 
     mock_data_seed=42,
-    mock_patterns=["repeat",  # Repeating sequences
-                "arithmetic",  # Simple arithmetic patterns
-                "random",  # Random sequences
-                "structured"]
+    mock_patterns=None # noqa
     )
