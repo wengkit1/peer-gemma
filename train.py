@@ -29,6 +29,7 @@ from configs.model.tiny import tiny_model
 from configs.model.small import small_model
 from configs.data.mock import mock_data
 from configs.data.tiny import tiny_data
+from configs.data.c4_data import c4_data
 from configs.training.quick import quick_training
 from configs.training.full import full_training
 from configs.experiment.test import test_experiment
@@ -47,6 +48,7 @@ cs(small_model, name="small")
 cs = store(group="data")
 cs(mock_data, name="mock")
 cs(tiny_data, name="tiny")
+cs(c4_data, name="c4")
 
 cs = store(group="training")
 cs(quick_training, name="quick")
