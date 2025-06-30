@@ -9,5 +9,5 @@ tiny_data = DataConfig(
     num_samples=200,
     use_mock_data=True,
     mock_data_seed=42,
-    mock_patterns=["repeat", "arithmetic"],
+    # mock_patterns=["repeat", "arithmetic"],
 )
