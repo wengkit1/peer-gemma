@@ -268,7 +268,7 @@ def test_data():
     try:
         # Test with small dataset
         data_module = create_data_module(
-            dataset_name='c4',
+            dataset_name='allenai/c4',
             dataset_config='en',
             sequence_length=128,
             batch_size=2,
