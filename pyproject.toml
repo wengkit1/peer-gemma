@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "datasets>=3.6.0",
     "hydra-zen>=0.10.0",
     "loguru>=0.7.0",
     "peer-pytorch>=0.2.1",

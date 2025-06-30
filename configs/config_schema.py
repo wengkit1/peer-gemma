@@ -32,15 +32,27 @@ class DataConfig:
     """Data configuration"""
     sequence_length: int = 256
     vocab_size: int = 2000
-    batch_size: int = 4
-    num_samples: int = 1000
+    batch_size: int = 4  # Small for Mac testing
+    num_samples: int = 1000  # For mock data
 
     # Mock data settings
     use_mock_data: bool = True
     mock_data_seed: int = 42
-    mock_patterns: List[str] = field(default_factory=lambda: [
-        "repeat", "arithmetic", "random", "structured"
-    ])
+    mock_patterns: List[str] = None  # Will be set in __post_init__
+
+    # Real data settings
+    dataset_name: str = "wikitext"
+    dataset_config: Optional[str] = "wikitext-2-raw-v1"
+    tokenizer_name: str = "google/gemma-2b"
+
+    def __post_init__(self):
+        if self.mock_patterns is None:
+            self.mock_patterns = [
+                "repeat",  # Repeating sequences
+                "arithmetic",  # Simple arithmetic patterns
+                "random",  # Random sequences
+                "structured"  # Structured patterns
+            ]
 
 @dataclass
 class TrainingConfig:

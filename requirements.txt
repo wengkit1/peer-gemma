@@ -6,3 +6,9 @@ hydra-zen>=0.10.0
 wandb>=0.16.0
 loguru>=0.7.0
 python-dotenv>=1.0.0
+numpy~=2.3.1
+omegaconf~=2.3.0
+hydra_zen~=0.15.0
+datasets~=3.6.0
+hydra_zen~=0.15.0
+datasets==3.6.0

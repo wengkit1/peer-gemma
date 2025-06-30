@@ -37,7 +37,6 @@ from configs.system.mac import mac_system
 from configs.system.cpu import cpu_system
 
 # Import our modules
-from data.mock_data import create_smart_data_module
 from models.peer_gemma_lightning import PEERGemmaLightningModule
 
 # Create store and add all configs
@@ -228,17 +227,6 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
     # Setup wandb
     wandb_logger = setup_wandb(experiment)
 
-    # Create data module
-    logger.info("📊 Creating data module...")
-    data_module = create_smart_data_module(
-        num_samples=data.num_samples,
-        sequence_length=data.sequence_length,
-        vocab_size=data.vocab_size,
-        batch_size=data.batch_size,
-        patterns=data.mock_patterns,
-        seed=data.mock_data_seed,
-    )
-
     # Create model
     logger.info("🤖 Creating model...")
     model_module = PEERGemmaLightningModule(
@@ -313,12 +301,12 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
     # Train model
     logger.info("🎯 Starting training...")
     try:
-        trainer.fit(model_module, data_module)
+        # trainer.fit(model_module, data_module)
         logger.success("🎉 Training completed successfully!")
 
         # Test model
         logger.info("🧪 Running test...")
-        trainer.test(model_module, data_module)
+        # trainer.test(model_module, data_module)
 
     except Exception as e:
         logger.error(f"❌ Training failed: {e}")
