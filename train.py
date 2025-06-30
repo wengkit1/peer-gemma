@@ -12,7 +12,7 @@ import wandb
 from pathlib import Path
 from loguru import logger
 import sys
-
+from data.data import create_data_module
 # Setup environment first
 from setup_env import setup_environment
 
@@ -222,7 +222,23 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
     logger.info(f"📋 Experiment: {experiment.experiment_name}")
     logger.info(f"🎯 Model: {model.hidden_size}d, {model.num_layers} layers")
     logger.info(f"📊 Data: {data.num_samples} samples, batch_size={data.batch_size}")
-
+    logger.info("📊 Creating data module...")
+    data_module = create_data_module(
+        dataset_name=data.dataset_name,
+        dataset_config=data.dataset_config,
+        sequence_length=data.sequence_length,
+        vocab_size=data.vocab_size,  # Use the data vocab_size, not model
+        batch_size=data.batch_size,
+        num_samples=data.num_samples,
+        num_workers=system.num_workers,
+        pin_memory=system.pin_memory,
+        persistent_workers=system.persistent_workers,
+        cache_dir=os.getenv("HF_DATASETS_CACHE", "~/scratch"),
+        seed=experiment.seed,
+        # Mock data settings
+        use_mock_data=data.use_mock_data,
+        mock_data_seed=data.mock_data_seed,
+    )
     # Set random seed
     pl.seed_everything(experiment.seed, workers=True)
 
@@ -303,12 +319,12 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
     # Train model
     logger.info("🎯 Starting training...")
     try:
-        # trainer.fit(model_module, data_module)
+        trainer.fit(model_module, data_module)
         logger.success("🎉 Training completed successfully!")
 
         # Test model
         logger.info("🧪 Running test...")
-        # trainer.test(model_module, data_module)
+        trainer.test(model_module, data_module)
 
     except Exception as e:
         logger.error(f"❌ Training failed: {e}")
