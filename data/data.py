@@ -100,10 +100,10 @@ class DataModule(pl.LightningDataModule):
 
     def __init__(
             self,
+            tokenizer=None,
             dataset_name: str = "wikitext",
             dataset_config: str = "wikitext-2-raw-v1",
             sequence_length: int = 256,
-            vocab_size: int = None,  # Not used, kept for compatibility
             batch_size: int = 4,
             num_samples: Optional[int] = None,
             num_workers: int = 2,
@@ -111,9 +111,9 @@ class DataModule(pl.LightningDataModule):
             persistent_workers: bool = True,
             cache_dir: Optional[str] = None,
             seed: int = 42,
-            **kwargs  # Accept additional kwargs for compatibility
     ):
         super().__init__()
+        self.tokenizer = tokenizer
         self.dataset_name = dataset_name
         self.dataset_config = dataset_config
         self.sequence_length = sequence_length
@@ -193,7 +193,8 @@ class DataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
-            drop_last=True
+            drop_last=True,
+            collate_fn=self._create_collate_fn()
         )
 
     def val_dataloader(self):
@@ -204,7 +205,8 @@ class DataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
-            drop_last=False
+            drop_last=False,
+            collate_fn=self._create_collate_fn()
         )
 
     def test_dataloader(self):
@@ -215,11 +217,45 @@ class DataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
-            drop_last=False
+            drop_last=False,
+            collate_fn=self._create_collate_fn()
         )
 
+    def _create_collate_fn(self):
+        """Create collate function for tokenization"""
+        if not self.tokenizer:
+            # Return your original behavior - just return the strings
+            return None
 
-def create_data_module(**kwargs) -> DataModule:
+        def collate_fn(batch):
+            # batch is list of strings from your TokenDataset
+            if isinstance(batch[0], str):
+                # Tokenize the batch of strings
+                tokenized = self.tokenizer(
+                    batch,
+                    truncation=True,
+                    padding=True,
+                    max_length=self.sequence_length,
+                    return_tensors="pt"
+                )
+
+                # For causal LM: labels = input_ids shifted
+                input_ids = tokenized['input_ids']
+                attention_mask = tokenized['attention_mask']
+
+                # Shift for causal LM loss
+                targets = input_ids.clone()
+
+                return input_ids, targets  # Return tuple as expected by your Lightning module
+            else:
+                # If already tokenized somehow
+                return batch
+
+        return collate_fn
+
+def create_data_module(
+        tokenizer=None,
+        **kwargs) -> DataModule:
     """Create a DataModule with platform-optimized settings"""
     import torch
     import platform
@@ -258,8 +294,8 @@ def create_data_module(**kwargs) -> DataModule:
         defaults['pin_memory'] = False
         defaults['num_workers'] = min(2, defaults['num_workers'])
 
-    return DataModule(**defaults)
-
+    data_module = DataModule(tokenizer=tokenizer, **defaults)
+    return data_module
 
 def test_data():
     """Test function for real data loading"""
