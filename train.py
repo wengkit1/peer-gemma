@@ -25,7 +25,6 @@ from hydra_zen import zen, store
 # Import our config schema and instances
 from configs.config_schema import Config, ModelConfig, DataConfig, TrainingConfig, ExperimentConfig, SystemConfig
 from configs.model.gemma_7b import gemma_7b_model  # New config
-from configs.data.mock import mock_data
 from configs.data.c4 import c4_data
 from configs.training.full import full_training
 from configs.experiment.nscc import nscc_experiment  # New config
@@ -39,7 +38,6 @@ cs = store(group="model")
 cs(gemma_7b_model, name="gemma_7b")
 
 cs = store(group="data")
-cs(mock_data, name="mock")
 cs(c4_data, name="c4")
 
 cs = store(group="training")
