@@ -1,6 +1,7 @@
 # setup_env.py
 """
-Fixed environment and secrets setup for PEER Gemma training
+Minimal environment setup - only handles .env loading
+PBS script handles all path configuration
 """
 import os
 from pathlib import Path
@@ -8,7 +9,7 @@ from dotenv import load_dotenv
 
 
 def setup_environment():
-    """Setup environment variables and paths"""
+    """Load .env file and validate tokens - paths handled by PBS script"""
 
     # If we're in a PBS job, change to the working directory first
     if 'PBS_O_WORKDIR' in os.environ:
@@ -36,51 +37,42 @@ def setup_environment():
         for loc in env_locations:
             print(f"   - {loc.absolute()}")
 
-    # Determine appropriate cache directory
-    home_dir = Path.home()
-
-    # Check if we're in PBS environment and cache dirs are already set
-    if 'PBS_JOBID' in os.environ and os.getenv("HF_HOME"):
-        # PBS script already set cache directories - respect them
-        print(f"🚀 Using PBS-configured cache directories:")
-        print(f"   HF_HOME: {os.getenv('HF_HOME')}")
-        print(f"   TORCH_HOME: {os.getenv('TORCH_HOME', 'not set')}")
-        # Don't override - just ensure consistency
-        os.environ["TRANSFORMERS_CACHE"] = os.environ["HF_HOME"]
-        os.environ["HF_DATASETS_CACHE"] = os.environ["HF_HOME"]
-        if not os.getenv("TORCH_HOME"):
-            os.environ["TORCH_HOME"] = str(Path(os.environ["HF_HOME"]).parent / "torch")
-    else:
-        # Set cache directories ourselves
-        if 'PBS_JOBID' in os.environ:
-            # We're in PBS but no cache dirs set - use scratch if available
-            scratch_dir = os.getenv("SCRATCH_DIR")
-            if scratch_dir:
-                cache_base = Path(scratch_dir) / ".cache"
-                print(f"🚀 Using HPC scratch space for cache: {cache_base}")
+    # Handle cache directories - use existing if set by PBS, otherwise create defaults
+    if 'PBS_JOBID' in os.environ:
+        # We're in PBS - use the paths that were already set
+        print("📁 Cache directories (set by PBS):")
+        cache_vars = ["HF_HOME", "TRANSFORMERS_CACHE", "HF_DATASETS_CACHE", "TORCH_HOME"]
+        for var in cache_vars:
+            value = os.getenv(var)
+            if value:
+                print(f"   {var}: {value}")
+                # Ensure the directory exists
+                try:
+                    os.makedirs(value, exist_ok=True)
+                except Exception as e:
+                    print(f"   ⚠️ Could not create {var} directory: {e}")
             else:
-                cache_base = home_dir / ".cache"
-                print(f"⚠️ No SCRATCH_DIR found, using home cache: {cache_base}")
-        else:
-            # Local development - use home cache
-            cache_base = home_dir / ".cache"
-            print(f"💻 Local development, using home cache: {cache_base}")
+                print(f"   {var}: not set")
+    else:
+        # Local development - set up local cache directories
+        print("💻 Setting up local development cache directories")
+        home_dir = Path.home()
+        cache_base = home_dir / ".cache"
 
-        # Set cache directories
-        hf_cache_dir = str(cache_base / "huggingface")
-        torch_cache_dir = str(cache_base / "torch")
+        # Only set if not already set
+        if not os.getenv("HF_HOME"):
+            hf_cache_dir = str(cache_base / "huggingface")
+            os.environ["HF_HOME"] = hf_cache_dir
+            os.environ["TRANSFORMERS_CACHE"] = hf_cache_dir
+            os.environ["HF_DATASETS_CACHE"] = hf_cache_dir
+            os.makedirs(hf_cache_dir, exist_ok=True)
+            print(f"   HF_HOME: {hf_cache_dir}")
 
-        os.environ["HF_HOME"] = hf_cache_dir
-        os.environ["TRANSFORMERS_CACHE"] = hf_cache_dir
-        os.environ["HF_DATASETS_CACHE"] = hf_cache_dir
-        os.environ["TORCH_HOME"] = torch_cache_dir
-
-    # Create cache directories
-    os.makedirs(hf_cache_dir, exist_ok=True)
-    os.makedirs(torch_cache_dir, exist_ok=True)
-
-    print(f"✅ HuggingFace cache: {hf_cache_dir}")
-    print(f"✅ PyTorch cache: {torch_cache_dir}")
+        if not os.getenv("TORCH_HOME"):
+            torch_cache_dir = str(cache_base / "torch")
+            os.environ["TORCH_HOME"] = torch_cache_dir
+            os.makedirs(torch_cache_dir, exist_ok=True)
+            print(f"   TORCH_HOME: {torch_cache_dir}")
 
     # Check tokens (warn but don't fail)
     hf_token = os.getenv("HF_TOKEN")
