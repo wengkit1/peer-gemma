@@ -36,7 +36,7 @@ class PEERGemmaForCausalLM(GemmaForCausalLM):
         default_peer_config = {
             "dim": hidden_size,
             "heads": min(16, hidden_size // 128),  # Reasonable default
-            "num_experts": 1_000_000,
+            "num_experts": 250_000,
             "num_experts_per_head": 16,
             "dim_key": 128,
             "pre_rmsnorm": True
@@ -214,102 +214,102 @@ class PEERGemmaForCausalLM(GemmaForCausalLM):
         logger.info("All parameters unfrozen")
 
 
-def create_custom_gemma_config(
-        hidden_size: int = 512,
-        num_layers: int = 8,
-        num_heads: int = 8,
-        intermediate_size: int = 1024,
-        vocab_size: int = 1000
-) -> GemmaConfig:
-    """Create a small custom Gemma config for testing"""
-    config = GemmaConfig(
-        vocab_size=vocab_size,
-        hidden_size=hidden_size,
-        intermediate_size=intermediate_size,
-        num_hidden_layers=num_layers,
-        num_attention_heads=num_heads,
-        num_key_value_heads=num_heads,
-        head_dim=hidden_size // num_heads,
-        max_position_embeddings=2048,
-        rms_norm_eps=1e-6,
-        rope_theta=10000.0,
-        attention_bias=False,
-        attention_dropout=0.0,
-        mlp_bias=False,
-    )
-    return config
+# def create_custom_gemma_config(
+#         hidden_size: int = 512,
+#         num_layers: int = 8,
+#         num_heads: int = 8,
+#         intermediate_size: int = 1024,
+#         vocab_size: int = 1000
+# ) -> GemmaConfig:
+#     """Create a small custom Gemma config for testing"""
+#     config = GemmaConfig(
+#         vocab_size=vocab_size,
+#         hidden_size=hidden_size,
+#         intermediate_size=intermediate_size,
+#         num_hidden_layers=num_layers,
+#         num_attention_heads=num_heads,
+#         num_key_value_heads=num_heads,
+#         head_dim=hidden_size // num_heads,
+#         max_position_embeddings=2048,
+#         rms_norm_eps=1e-6,
+#         rope_theta=10000.0,
+#         attention_bias=False,
+#         attention_dropout=0.0,
+#         mlp_bias=False,
+#     )
+#     return config
 
 
-def test_peer_surgery_pretrained():
-    """Test PEER surgery on a pretrained model"""
-
-    logger.remove()
-    logger.add(
-        sys.stderr,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
-        level="INFO"
-    )
-
-    logger.info("🚀 Starting PEER surgery test on pretrained model")
-
-    try:
-        # Test with small pretrained model first
-        model_name = "google/gemma-2b"  # Smaller model for testing
-
-        logger.info(f"Loading pretrained model: {model_name}")
-
-        # Create PEER model from pretrained
-        peer_model = PEERGemmaForCausalLM.from_pretrained_with_surgery(
-            model_name,
-            replace_layers="middle",
-            peer_config={
-                "num_experts": 100000,  # Smaller for testing
-                "heads": 8,
-                "num_experts_per_head": 16
-            },
-            torch_dtype=torch.bfloat16,
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
-        scratch_dir = os.getenv("SCRATCH.DIR")
-        peer_model.save_pretrained(f"{scratch_dir}/models/peer_gemma_7b_ready")
-        # Get surgery info
-        surgery_info = peer_model.get_surgery_info()
-
-        # Log results
-        logger.success("✅ PEER surgery successful!")
-        logger.info(f"📊 Replaced layers: {surgery_info['replaced_layer_indices']}")
-        logger.info(f"📈 Total parameters: {surgery_info['parameter_counts']['total_parameters']:,}")
-        logger.info(f"🎯 PEER parameters: {surgery_info['parameter_counts']['peer_parameters']:,}")
-        logger.info(f"📊 PEER ratio: {surgery_info['parameter_counts']['peer_ratio']:.3f}")
-
-        # Test forward pass
-        logger.info("Testing forward pass...")
-        from transformers import AutoTokenizer
-
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        test_text = "The quick brown fox"
-        inputs = tokenizer(test_text, return_tensors="pt")
-
-        if torch.cuda.is_available():
-            inputs = {k: v.cuda() for k, v in inputs.items()}
-            peer_model = peer_model.cuda()
-
-        with torch.no_grad():
-            outputs = peer_model(**inputs)
-            logger.success(f"✅ Forward pass successful! Output shape: {outputs.logits.shape}")
-
-        # Test PEER layer access
-        peer_layers = peer_model.get_peer_layers()
-        logger.info(f"🔍 Found {len(peer_layers)} PEER layers")
-
-        logger.success("🎉 Pretrained PEER surgery test completed!")
-        return True
-
-    except Exception as e:
-        logger.error(f"❌ Test failed: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
+# def test_peer_surgery_pretrained():
+#     """Test PEER surgery on a pretrained model"""
+#
+#     logger.remove()
+#     logger.add(
+#         sys.stderr,
+#         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
+#         level="INFO"
+#     )
+#
+#     logger.info("🚀 Starting PEER surgery test on pretrained model")
+#
+#     try:
+#         # Test with small pretrained model first
+#         model_name = "google/gemma-2b"  # Smaller model for testing
+#
+#         logger.info(f"Loading pretrained model: {model_name}")
+#
+#         # Create PEER model from pretrained
+#         peer_model = PEERGemmaForCausalLM.from_pretrained_with_surgery(
+#             model_name,
+#             replace_layers="middle",
+#             peer_config={
+#                 "num_experts": 50_000,
+#                 "heads": 8,
+#                 "num_experts_per_head": 16
+#             },
+#             torch_dtype=torch.bfloat16,
+#             device_map="auto" if torch.cuda.is_available() else None,
+#         )
+#         scratch_dir = os.getenv("SCRATCH.DIR")
+#         peer_model.save_pretrained(f"{scratch_dir}/models/peer_gemma_7b_ready")
+#         # Get surgery info
+#         surgery_info = peer_model.get_surgery_info()
+#
+#         # Log results
+#         logger.success("✅ PEER surgery successful!")
+#         logger.info(f"📊 Replaced layers: {surgery_info['replaced_layer_indices']}")
+#         logger.info(f"📈 Total parameters: {surgery_info['parameter_counts']['total_parameters']:,}")
+#         logger.info(f"🎯 PEER parameters: {surgery_info['parameter_counts']['peer_parameters']:,}")
+#         logger.info(f"📊 PEER ratio: {surgery_info['parameter_counts']['peer_ratio']:.3f}")
+#
+#         # Test forward pass
+#         logger.info("Testing forward pass...")
+#         from transformers import AutoTokenizer
+#
+#         tokenizer = AutoTokenizer.from_pretrained(model_name)
+#         if tokenizer.pad_token is None:
+#             tokenizer.pad_token = tokenizer.eos_token
+#
+#         test_text = "The quick brown fox"
+#         inputs = tokenizer(test_text, return_tensors="pt")
+#
+#         if torch.cuda.is_available():
+#             inputs = {k: v.cuda() for k, v in inputs.items()}
+#             peer_model = peer_model.cuda()
+#
+#         with torch.no_grad():
+#             outputs = peer_model(**inputs)
+#             logger.success(f"✅ Forward pass successful! Output shape: {outputs.logits.shape}")
+#
+#         # Test PEER layer access
+#         peer_layers = peer_model.get_peer_layers()
+#         logger.info(f"🔍 Found {len(peer_layers)} PEER layers")
+#
+#         logger.success("🎉 Pretrained PEER surgery test completed!")
+#         return True
+#
+#     except Exception as e:
+#         logger.error(f"❌ Test failed: {e}")
+#         import traceback
+#         logger.error(traceback.format_exc())
+#         return False
