@@ -132,39 +132,6 @@ class PEERGemmaLightningModule(pl.LightningModule):
             else:
                 return base_model
 
-        else:
-            # Create custom model (original behavior)
-            logger.info("Creating custom Gemma model...")
-            config = create_custom_gemma_config(
-                hidden_size=self.hparams.hidden_size,
-                num_layers=self.hparams.num_layers,
-                num_heads=self.hparams.num_heads,
-                intermediate_size=self.hparams.intermediate_size,
-                vocab_size=self.hparams.vocab_size
-            )
-            config.max_position_embeddings = self.hparams.max_position_embeddings
-
-            if self.hparams.peer_enabled:
-                peer_config = {
-                    "dim": self.hparams.hidden_size,
-                    "heads": self.hparams.peer_heads,
-                    "num_experts": self.hparams.peer_num_experts,
-                    "num_experts_per_head": self.hparams.peer_num_experts_per_head,
-                    "dim_key": self.hparams.peer_dim_key,
-                    "pre_rmsnorm": self.hparams.peer_pre_rmsnorm
-                }
-
-                model = PEERGemmaForCausalLM(
-                    config,
-                    replace_layers=self.hparams.replace_layers,
-                    peer_config=peer_config
-                )
-            else:
-                from transformers import GemmaForCausalLM
-                model = GemmaForCausalLM(config)
-
-            return model
-
     def _count_parameters(self) -> int:
         """Count total parameters"""
         return sum(p.numel() for p in self.parameters())
