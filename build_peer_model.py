@@ -24,7 +24,7 @@ def build_peer_model():
 
     # Create PEER model with surgery
     peer_config = {
-        "num_experts": 100_000,
+        "num_experts": 250_000,
         "heads": 16,
         "num_experts_per_head": 16,
         "dim_key": 128,
