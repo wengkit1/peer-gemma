@@ -24,14 +24,14 @@ from hydra_zen import zen, store
 
 # Import our config schema and instances
 from configs.config_schema import Config, ModelConfig, DataConfig, TrainingConfig, ExperimentConfig, SystemConfig
-from configs.model.gemma_7b import gemma_7b_model  # New config
+from configs.model.gemma_7b import gemma_7b_model
 from configs.data.c4 import c4_data
 from configs.training.full import full_training
-from configs.experiment.nscc import nscc_experiment  # New config
-from configs.system.nscc import nscc_system  # New config
+from configs.experiment.nscc import nscc_experiment
+from configs.system.nscc import nscc_system
 
 from models.peer_gemma_lightning import PEERGemmaLightningModule
-from data.data import create_data_module  # New data module
+from data.data import create_data_module
 
 # Create store and add all configs
 cs = store(group="model")

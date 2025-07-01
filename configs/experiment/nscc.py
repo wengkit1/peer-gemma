@@ -9,6 +9,6 @@ nscc_experiment = ExperimentConfig(
     wandb_notes="Training PEER Gemma 7B on NSCC ASPIRE 2A",
     log_every_n_steps=50,
     save_top_k=3,
-    output_dir=f"{scratch_dir}/peer_gemma_experiments",  # Use the actual scratch dir
+    output_dir=f"{scratch_dir}/peer_gemma_experiments",
     seed=42,
 )
