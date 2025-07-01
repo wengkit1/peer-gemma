@@ -24,7 +24,7 @@ def build_peer_model():
 
     # Create PEER model with surgery
     peer_config = {
-        "num_experts": 1_000_000,
+        "num_experts": 100_000,
         "heads": 16,
         "num_experts_per_head": 16,
         "dim_key": 128,
@@ -36,7 +36,6 @@ def build_peer_model():
         replace_layers="middle",
         peer_config=peer_config,
         torch_dtype=torch.bfloat16,
-        token=os.getenv("HF_TOKEN")
     )
 
     # Save the model
