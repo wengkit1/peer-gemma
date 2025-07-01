@@ -16,7 +16,7 @@ import os
 
 import sys
 sys.path.append('.')
-from peer_gemma import PEERGemmaForCausalLM, create_custom_gemma_config
+from peer_gemma import PEERGemmaForCausalLM
 
 
 class PEERGemmaLightningModule(pl.LightningModule):
