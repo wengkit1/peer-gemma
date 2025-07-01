@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import os
 import torch
+from setup_env import setup_environment
+setup_environment()
+
 from peer_gemma import PEERGemmaForCausalLM
 from loguru import logger
 
