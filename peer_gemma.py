@@ -270,7 +270,8 @@ def test_peer_surgery_pretrained():
             torch_dtype=torch.bfloat16,
             device_map="auto" if torch.cuda.is_available() else None,
         )
-
+        scratch_dir = os.getenv("SCRATCH.DIR")
+        peer_model.save_pretrained(f"{scratch_dir}/models/peer_gemma_7b_ready")
         # Get surgery info
         surgery_info = peer_model.get_surgery_info()
 

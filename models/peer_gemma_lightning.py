@@ -89,9 +89,20 @@ class PEERGemmaLightningModule(pl.LightningModule):
         """Create the PEER Gemma model"""
 
         if self.hparams.use_pretrained:
-            logger.info(f"Loading pretrained model: {self.hparams.model_name_or_path}")
+            # Check for pre-built PEER model first
+            scratch_dir = os.getenv("SCRATCH_DIR", f"/scratch/users/nus/{os.getenv('USER', 'e0686150')}")
+            prebuild_path = f"{scratch_dir}/models/peer_gemma_7b_ready"
 
-            # Load pretrained Gemma model
+            if os.path.exists(f"{prebuild_path}/config.json") and self.hparams.peer_enabled:
+                logger.info(f"Loading pre-built PEER model from: {prebuild_path}")
+                return PEERGemmaForCausalLM.from_pretrained(
+                    prebuild_path,
+                    torch_dtype=torch.bfloat16,
+                    device_map=None
+                )
+
+            logger.info(f"Loading pretrained model: {self.hparams.model_name_or_path}")
+            # Load base model first
             base_model = AutoModelForCausalLM.from_pretrained(
                 self.hparams.model_name_or_path,
                 token=os.getenv("HF_TOKEN"),
@@ -101,9 +112,8 @@ class PEERGemmaLightningModule(pl.LightningModule):
             )
 
             if self.hparams.peer_enabled:
-                # Create PEER model using surgery approach
-                logger.info("Performing PEER surgery on pretrained model...")
-
+                # Only do surgery if no pre-built model exists
+                logger.warning("Performing PEER surgery during training - this may cause distributed issues")
                 peer_config = {
                     "dim": base_model.config.hidden_size,
                     "heads": self.hparams.peer_heads,
@@ -113,19 +123,11 @@ class PEERGemmaLightningModule(pl.LightningModule):
                     "pre_rmsnorm": self.hparams.peer_pre_rmsnorm
                 }
 
-                # Convert to PEER model
                 model = PEERGemmaForCausalLM.from_pretrained_with_surgery(
                     base_model,
                     replace_layers=self.hparams.replace_layers,
                     peer_config=peer_config
                 )
-
-                surgery_info = model.get_surgery_info()
-                logger.info(f"PEER surgery completed:")
-                logger.info(f"  Replaced layers: {surgery_info['replaced_layer_indices']}")
-                logger.info(f"  PEER parameters: {surgery_info['parameter_counts']['peer_parameters']:,}")
-                logger.info(f"  PEER ratio: {surgery_info['parameter_counts']['peer_ratio']:.3f}")
-
                 return model
             else:
                 return base_model
