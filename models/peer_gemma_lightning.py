@@ -1,5 +1,5 @@
 """
-Updated PyTorch Lightning module for PEER Gemma training with pretrained models
+Simplified PyTorch Lightning module - expects tokenized data from DataLoader
 """
 import torch
 import torch.nn.functional as F
@@ -20,18 +20,32 @@ from peer_gemma import PEERGemmaForCausalLM
 
 
 class PEERGemmaLightningModule(pl.LightningModule):
-    """Lightning module for PEER Gemma language modeling with pretrained support"""
+    """Lightning module for PEER Gemma - expects tokenized data from DataLoader"""
 
     def __init__(
             self,
+            # Model config
+            use_pretrained: bool = True,
+            model_name_or_path: str = "google/gemma-7b",
+            tokenizer_name: Optional[str] = None,
+
+            # PEER config
+            replace_layers: str = "middle",
+            peer_enabled: bool = True,
+            peer_num_experts: int = 250_000,
+            peer_heads: int = 16,
+            peer_num_experts_per_head: int = 16,
+            peer_dim_key: int = 128,
+            peer_pre_rmsnorm: bool = True,
+
             # Training config
-            learning_rate: float = 1e-5,  # Lower LR for pretrained models
+            learning_rate: float = 1e-5,
             weight_decay: float = 0.01,
             beta1: float = 0.9,
             beta2: float = 0.95,
             eps: float = 1e-8,
             scheduler_type: str = "cosine",
-            warmup_steps: int = 1000,  # More warmup for larger models
+            warmup_steps: int = 1000,
             min_lr_ratio: float = 0.1,
             max_epochs: int = 5,
 
@@ -54,7 +68,6 @@ class PEERGemmaLightningModule(pl.LightningModule):
 
         # Create model
         self.model = self._create_model()
-        self.tokenizer = self._load_tokenizer()
 
         # Training settings
         self.learning_rate = learning_rate
@@ -68,22 +81,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
         self.max_epochs = max_epochs
         self.log_detailed_metrics = log_detailed_metrics
 
-        # Metrics tracking
-        self.training_step_outputs = []
-        self.validation_step_outputs = []
-
         logger.info(f"Created PEERGemmaLightningModule with {self._count_parameters():,} parameters")
-
-    def _load_tokenizer(self):
-        """Load tokenizer"""
-        tokenizer_name = self.hparams.tokenizer_name or self.hparams.model_name_or_path
-        tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name,
-            token=os.getenv("HF_TOKEN")
-        )
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        return tokenizer
 
     def _create_model(self):
         """Create the PEER Gemma model"""
@@ -98,7 +96,9 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 return PEERGemmaForCausalLM.from_pretrained(
                     prebuild_path,
                     torch_dtype='auto',
-                    device_map=None
+                    device_map=None,  # Disable automatic device mapping
+                    trust_remote_code=True,
+                    use_safetensors=True,
                 )
 
             logger.info(f"Loading pretrained model: {self.hparams.model_name_or_path}")
@@ -107,7 +107,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 self.hparams.model_name_or_path,
                 token=os.getenv("HF_TOKEN"),
                 torch_dtype='auto',
-                device_map=None,
+                device_map=None,  # Disable automatic device mapping
                 trust_remote_code=True,
             )
 
@@ -138,19 +138,12 @@ class PEERGemmaLightningModule(pl.LightningModule):
 
     def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, **kwargs):
         """Forward pass"""
-        try:
-            outputs = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                **kwargs
-            )
-            return outputs.logits
-        except Exception as e:
-            logger.error(f"Forward pass failed: {e}")
-            logger.error(f"Input shape: {input_ids.shape}")
-            logger.error(f"Input device: {input_ids.device}")
-            logger.error(f"Model device: {next(self.model.parameters()).device}")
-            raise
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **kwargs
+        )
+        return outputs.logits
 
     def _compute_loss(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute cross-entropy loss"""
@@ -176,40 +169,25 @@ class PEERGemmaLightningModule(pl.LightningModule):
         # Accuracy (only on non-padded tokens)
         predictions = torch.argmax(shift_logits, dim=-1)
         mask = shift_labels != -100
-        correct = (predictions == shift_labels) & mask
-        accuracy = correct.sum().float() / mask.sum().float()
-        metrics['accuracy'] = accuracy
+        if mask.sum() > 0:  # Avoid division by zero
+            correct = (predictions == shift_labels) & mask
+            accuracy = correct.sum().float() / mask.sum().float()
+            metrics['accuracy'] = accuracy
 
-        # Perplexity
-        loss = self._compute_loss(logits, labels)
-        perplexity = torch.exp(loss)
-        metrics['perplexity'] = perplexity
+            # Perplexity
+            loss = self._compute_loss(logits, labels)
+            perplexity = torch.exp(loss)
+            metrics['perplexity'] = perplexity
 
         return metrics
 
     def training_step(self, batch, batch_idx: int) -> torch.Tensor:
-        # If batch is list of strings (from your original data.py)
-        if isinstance(batch, (list, tuple)) and isinstance(batch[0], str):
-            # Tokenize on-the-fly
-            tokenized = self.tokenizer(
-                batch,
-                truncation=True,
-                padding=True,
-                max_length=self.sequence_length,
-                return_tensors="pt"
-            ).to(self.device)
+        """Training step - expects tokenized batch from DataLoader"""
 
-            input_ids = tokenized['input_ids']
-            attention_mask = tokenized['attention_mask']
-            labels = input_ids.clone()  # For causal LM
-
-        # If batch is already tokenized dict
-        elif isinstance(batch, dict):
-            input_ids = batch['input_ids']
-            attention_mask = batch.get('attention_mask', None)
-            labels = batch.get('labels', input_ids)
-        else:
-            raise ValueError(f"Unexpected batch type: {type(batch)}")
+        # Batch should be a dict with 'input_ids', 'attention_mask', 'labels'
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
+        labels = batch['labels']
 
         # Forward pass
         logits = self(input_ids, attention_mask=attention_mask)
@@ -217,14 +195,24 @@ class PEERGemmaLightningModule(pl.LightningModule):
         # Compute loss
         loss = self._compute_loss(logits, labels)
 
-        # Rest of your training step...
+        # Log loss
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+
+        # Optionally compute and log metrics
+        if self.log_detailed_metrics:
+            metrics = self._compute_metrics(logits, labels)
+            for name, value in metrics.items():
+                self.log(f'train_{name}', value, on_step=True, on_epoch=True, sync_dist=True)
+
         return loss
 
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        """Validation step"""
+    def validation_step(self, batch, batch_idx: int) -> torch.Tensor:
+        """Validation step - expects tokenized batch from DataLoader"""
+
+        # Batch should be a dict with 'input_ids', 'attention_mask', 'labels'
         input_ids = batch['input_ids']
-        attention_mask = batch.get('attention_mask', None)
-        labels = batch.get('labels', input_ids)
+        attention_mask = batch['attention_mask']
+        labels = batch['labels']
 
         # Forward pass
         logits = self(input_ids, attention_mask=attention_mask)
@@ -306,6 +294,9 @@ class PEERGemmaLightningModule(pl.LightningModule):
 
     def on_train_start(self) -> None:
         """Called when training starts"""
+        # Set optimal tensor core precision
+        torch.set_float32_matmul_precision('medium')
+
         if self.logger and hasattr(self.logger, 'experiment'):
             try:
                 # Log model info

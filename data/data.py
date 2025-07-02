@@ -1,8 +1,6 @@
 """
-Real data loading module for PEER Gemma training on NSCC
-Uses HuggingFace datasets - NO tokenization here, model handles it
+Fixed data loading module for PEER Gemma training
 """
-import torch
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader
 from datasets import load_dataset
@@ -12,7 +10,7 @@ import os
 
 
 class TokenDataset(Dataset):
-    """Dataset that loads raw text - model will tokenize during forward pass"""
+    """Dataset that loads and tokenizes text"""
 
     def __init__(
             self,
@@ -21,7 +19,8 @@ class TokenDataset(Dataset):
             split: str = "train",
             sequence_length: int = 256,
             max_samples: Optional[int] = None,
-            cache_dir: Optional[str] = None
+            cache_dir: Optional[str] = None,
+            tokenizer=None  # Add tokenizer parameter
     ):
         self.dataset_name = dataset_name
         self.dataset_config = dataset_config
@@ -29,6 +28,7 @@ class TokenDataset(Dataset):
         self.sequence_length = sequence_length
         self.max_samples = max_samples
         self.cache_dir = cache_dir or os.getenv("HF_DATASETS_CACHE", "~/scratch")
+        self.tokenizer = tokenizer
 
         # Load raw text data
         self._load_raw_data()
@@ -91,12 +91,12 @@ class TokenDataset(Dataset):
         return len(self.texts)
 
     def __getitem__(self, idx: int):
-        """Return raw text string"""
+        """Return raw text string - tokenization happens in collate_fn"""
         return self.texts[idx]
 
 
 class DataModule(pl.LightningDataModule):
-    """Lightning data module for real datasets"""
+    """Lightning data module that tokenizes in the collate function"""
 
     def __init__(
             self,
@@ -146,7 +146,8 @@ class DataModule(pl.LightningDataModule):
                 split="train",
                 sequence_length=self.sequence_length,
                 max_samples=int(0.8 * self.num_samples) if self.num_samples else None,
-                cache_dir=self.cache_dir
+                cache_dir=self.cache_dir,
+                tokenizer=self.tokenizer
             )
 
             # Validation dataset
@@ -157,7 +158,8 @@ class DataModule(pl.LightningDataModule):
                     split="validation",
                     sequence_length=self.sequence_length,
                     max_samples=int(0.1 * self.num_samples) if self.num_samples else 100,
-                    cache_dir=self.cache_dir
+                    cache_dir=self.cache_dir,
+                    tokenizer=self.tokenizer
                 )
             except:
                 # If no validation split, use a portion of train
@@ -168,7 +170,8 @@ class DataModule(pl.LightningDataModule):
                     split="train[:10%]",
                     sequence_length=self.sequence_length,
                     max_samples=100,
-                    cache_dir=self.cache_dir
+                    cache_dir=self.cache_dir,
+                    tokenizer=self.tokenizer
                 )
 
         if stage == "test" or stage is None:
@@ -179,11 +182,40 @@ class DataModule(pl.LightningDataModule):
                     split="test",
                     sequence_length=self.sequence_length,
                     max_samples=int(0.1 * self.num_samples) if self.num_samples else 100,
-                    cache_dir=self.cache_dir
+                    cache_dir=self.cache_dir,
+                    tokenizer=self.tokenizer
                 )
             except:
                 # Use validation as test if no test split
                 self.test_dataset = self.val_dataset
+
+    def _collate_fn(self, batch):
+        """Collate function that tokenizes text and returns proper tensors"""
+        if not self.tokenizer:
+            raise ValueError("Tokenizer is required for collate function")
+
+        # batch is a list of strings
+        texts = batch
+
+        # Tokenize the batch
+        tokenized = self.tokenizer(
+            texts,
+            truncation=True,
+            padding=True,
+            max_length=self.sequence_length,
+            return_tensors="pt"
+        )
+
+        # For causal LM: input_ids serve as both input and labels
+        input_ids = tokenized['input_ids']
+        attention_mask = tokenized['attention_mask']
+
+        # Return a dict that Lightning expects
+        return {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'labels': input_ids.clone()  # For causal LM, labels = input_ids
+        }
 
     def train_dataloader(self):
         return DataLoader(
@@ -194,7 +226,7 @@ class DataModule(pl.LightningDataModule):
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
             drop_last=True,
-            collate_fn=self._create_collate_fn()
+            collate_fn=self._collate_fn
         )
 
     def val_dataloader(self):
@@ -206,7 +238,7 @@ class DataModule(pl.LightningDataModule):
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
             drop_last=False,
-            collate_fn=self._create_collate_fn()
+            collate_fn=self._collate_fn
         )
 
     def test_dataloader(self):
@@ -218,44 +250,11 @@ class DataModule(pl.LightningDataModule):
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
             drop_last=False,
-            collate_fn=self._create_collate_fn()
+            collate_fn=self._collate_fn
         )
 
-    def _create_collate_fn(self):
-        """Create collate function for tokenization"""
-        if not self.tokenizer:
-            # Return your original behavior - just return the strings
-            return None
 
-        def collate_fn(batch):
-            # batch is list of strings from your TokenDataset
-            if isinstance(batch[0], str):
-                # Tokenize the batch of strings
-                tokenized = self.tokenizer(
-                    batch,
-                    truncation=True,
-                    padding=True,
-                    max_length=self.sequence_length,
-                    return_tensors="pt"
-                )
-
-                # For causal LM: labels = input_ids shifted
-                input_ids = tokenized['input_ids']
-                attention_mask = tokenized['attention_mask']
-
-                # Shift for causal LM loss
-                targets = input_ids.clone()
-
-                return input_ids, targets  # Return tuple as expected by your Lightning module
-            else:
-                # If already tokenized somehow
-                return batch
-
-        return collate_fn
-
-def create_data_module(
-        tokenizer=None,
-        **kwargs) -> DataModule:
+def create_data_module(tokenizer=None, **kwargs) -> DataModule:
     """Create a DataModule with platform-optimized settings"""
     import torch
     import platform
@@ -296,47 +295,3 @@ def create_data_module(
 
     data_module = DataModule(tokenizer=tokenizer, **defaults)
     return data_module
-
-def test_data():
-    """Test function for real data loading"""
-    logger.info("Testing real data loading...")
-
-    try:
-        # Test with small dataset
-        data_module = create_data_module(
-            dataset_name='allenai/c4',
-            dataset_config='en',
-            sequence_length=128,
-            batch_size=2,
-            num_samples=100,
-            num_workers=1
-        )
-
-        logger.info("Setting up data module...")
-        data_module.setup("fit")
-
-        logger.info("Testing train dataloader...")
-        train_loader = data_module.train_dataloader()
-        batch = next(iter(train_loader))
-
-        logger.info(f"Batch type: {type(batch)}")
-        logger.info(f"Batch length: {len(batch)}")
-        logger.info(f"Sample text preview: {batch[0][:100] if batch[0] else 'None'}...")
-
-        # Validate batch contains text strings
-        assert isinstance(batch, (list, tuple)), f"Expected list/tuple, got {type(batch)}"
-        assert len(batch) == 2, f"Expected batch size 2, got {len(batch)}"
-        assert all(isinstance(text, str) for text in batch), "Expected all items to be strings"
-
-        logger.success("✅ Real data test passed!")
-        return True
-
-    except Exception as e:
-        logger.error(f"❌ Real data test failed: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-
-if __name__ == "__main__":
-    test_data()

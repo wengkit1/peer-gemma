@@ -212,7 +212,7 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
         tokenizer.pad_token = tokenizer.eos_token
 
     # Create data module with tokenizer
-    logger.info("📊 Creating tokenized data module...")
+    logger.info(" Creating tokenized data module...")
     data_module = create_data_module(
         tokenizer=tokenizer,
         dataset_name=data.dataset_name,
@@ -227,10 +227,8 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
         seed=experiment.seed,
     )
 
-    # Create model
-    logger.info("🤖 Creating PEER Gemma model...")
+    logger.info(" Creating PEER Gemma model...")
     model_module = PEERGemmaLightningModule(
-        # Model config - now supports pretrained
         use_pretrained=model.use_pretrained,
         model_name_or_path=model.model_name_or_path,
         tokenizer_name=model.tokenizer_name,
