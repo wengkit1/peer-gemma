@@ -32,7 +32,7 @@ def build_peer_model():
     }
 
     peer_model = PEERGemmaForCausalLM.from_pretrained_with_surgery_inplace(
-        "google/gemma-7b",
+        "google/gemma-2b",
         replace_layers="first_half",
         peer_config=peer_config,
         torch_dtype=torch.bfloat16,

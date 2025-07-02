@@ -1,11 +1,9 @@
-# Updated peer_gemma.py
 import torch
 from transformers import GemmaForCausalLM, GemmaConfig, AutoModelForCausalLM
 from PEER_pytorch import PEER
 from loguru import logger
 from typing import List, Dict, Any, Union
 import json
-import sys
 import os
 
 
