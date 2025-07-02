@@ -4,8 +4,8 @@ from configs.config_schema import ModelConfig
 gemma_7b_model = ModelConfig(
     # Pretrained model settings
     use_pretrained=True,
-    model_name_or_path="google/gemma-7b",
-    tokenizer_name="google/gemma-7b",
+    model_name_or_path="google/gemma-2b",
+    tokenizer_name="google/gemma-2b",
 
     # Model architecture (will be loaded from pretrained)
     hidden_size=3072,  # Actual Gemma 7B hidden size
