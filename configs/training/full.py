@@ -10,7 +10,7 @@ full_training = TrainingConfig(
     warmup_steps=500,
     precision="bf16-mixed",
     gradient_clip_val=1.0,
-    accumulate_grad_batches=8,
+    accumulate_grad_batches=16, # 16 * 8 workers * 4 batchs-size
     val_check_interval=0.25,
     limit_val_batches=100,
 )
