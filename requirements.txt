@@ -13,3 +13,4 @@ datasets~=3.6.0
 hydra_zen~=0.15.0
 datasets==3.6.0
 deepspeed==0.17.1
+accelerator==2024.9.13

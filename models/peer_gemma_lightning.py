@@ -107,7 +107,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 self.hparams.model_name_or_path,
                 token=os.getenv("HF_TOKEN"),
                 torch_dtype='auto',
-                device_map='auto',
+                device_map=None,
                 trust_remote_code=True,
             )
 
