@@ -16,7 +16,7 @@ gemma_7b_model = ModelConfig(
     max_position_embeddings=8192,
 
     # PEER config - scaled for 7B model
-    replace_layers="middle",  # Replace middle layers
+    replace_layers="first_half",  # Replace middle layers
     peer_enabled=True,
     peer_num_experts=250_000,  # 1M experts as in paper
     peer_heads=16,  # Match model heads
