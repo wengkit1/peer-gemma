@@ -31,9 +31,9 @@ def build_peer_model():
         "pre_rmsnorm": True
     }
 
-    peer_model = PEERGemmaForCausalLM.from_pretrained_with_surgery(
+    peer_model = PEERGemmaForCausalLM.from_pretrained_with_surgery_inplace(
         "google/gemma-7b",
-        replace_layers="middle",
+        replace_layers="first_half",
         peer_config=peer_config,
         torch_dtype=torch.bfloat16,
     )

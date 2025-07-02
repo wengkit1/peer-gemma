@@ -93,55 +93,32 @@ class PEERGemmaForCausalLM(GemmaForCausalLM):
             raise ValueError(f"Invalid replace_layers: {self.replace_layers}")
 
     @classmethod
-    def from_pretrained_with_surgery(cls,
-                                     model_or_path: Union[str, GemmaForCausalLM],
-                                     replace_layers="middle",
-                                     peer_config=None,
-                                     **kwargs):
-        """Load pretrained Gemma and perform PEER surgery"""
+    def from_pretrained_with_surgery_inplace(cls,
+                                             model_path: str,
+                                             replace_layers="middle",
+                                             peer_config=None,
+                                             **kwargs):
+        """Load and modify model in-place to save memory"""
 
-        if isinstance(model_or_path, str):
-            logger.info(f"Loading model from: {model_or_path}")
-            # Load original model first
-            original_model = AutoModelForCausalLM.from_pretrained(
-                model_or_path,
-                token=os.getenv("HF_TOKEN"),
-                **kwargs
-            )
-        else:
-            # Model already loaded
-            original_model = model_or_path
-            logger.info("Using provided model instance")
-
-        # Create new model with surgery
-        logger.info("Performing PEER surgery...")
-        model = cls(
-            original_model.config,
-            replace_layers=replace_layers,
-            peer_config=peer_config
+        logger.info(f"Loading model from: {model_path}")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            token=os.getenv("HF_TOKEN"),
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            **kwargs
         )
 
-        # Copy weights from original model (except replaced MLP layers)
-        logger.info("Transferring weights...")
-        model_state = model.state_dict()
-        original_state = original_model.state_dict()
+        # Convert to our class (change __class__)
+        model.__class__ = cls
 
-        # Count successful transfers
-        transferred = 0
-        skipped = 0
+        # Add our attributes
+        model.replace_layers = replace_layers
+        model.peer_config = peer_config or {}
+        model.replaced_layer_indices = []
 
-        for name, param in original_state.items():
-            if name in model_state and model_state[name].shape == param.shape:
-                model_state[name].copy_(param)
-                transferred += 1
-            else:
-                skipped += 1
-                # Only log non-MLP skips as warnings
-                if "mlp" not in name and skipped <= 10:  # Limit warnings
-                    logger.debug(f"Skipped parameter: {name}")
-
-        logger.info(f"Weight transfer: {transferred} transferred, {skipped} skipped")
-        logger.success("PEER surgery completed successfully!")
+        # Perform surgery on the existing model
+        model._replace_mlp_layers()
 
         return model
 

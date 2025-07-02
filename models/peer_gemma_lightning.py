@@ -123,7 +123,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
                     "pre_rmsnorm": self.hparams.peer_pre_rmsnorm
                 }
 
-                model = PEERGemmaForCausalLM.from_pretrained_with_surgery(
+                model = PEERGemmaForCausalLM.from_pretrained_with_surgery_inplace(
                     base_model,
                     replace_layers=self.hparams.replace_layers,
                     peer_config=peer_config
