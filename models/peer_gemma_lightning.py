@@ -97,8 +97,8 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 logger.info(f"Loading pre-built PEER model from: {prebuild_path}")
                 return PEERGemmaForCausalLM.from_pretrained(
                     prebuild_path,
-                    torch_dtype=torch.bfloat16,
-                    device_map=None
+                    torch_dtype='auto',
+                    device_map='auto'
                 )
 
             logger.info(f"Loading pretrained model: {self.hparams.model_name_or_path}")
@@ -106,8 +106,8 @@ class PEERGemmaLightningModule(pl.LightningModule):
             base_model = AutoModelForCausalLM.from_pretrained(
                 self.hparams.model_name_or_path,
                 token=os.getenv("HF_TOKEN"),
-                torch_dtype=torch.bfloat16,
-                device_map=None,
+                torch_dtype='auto',
+                device_map='auto',
                 trust_remote_code=True,
             )
 
