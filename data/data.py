@@ -124,7 +124,6 @@ class DataModule(pl.LightningDataModule):
 
         # Platform-specific optimizations
         import torch
-        import platform
 
         if torch.backends.mps.is_available() and pin_memory:
             logger.info("Detected MPS (Mac), disabling pin_memory to avoid warnings")

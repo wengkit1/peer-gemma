@@ -96,9 +96,10 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 return PEERGemmaForCausalLM.from_pretrained(
                     prebuild_path,
                     torch_dtype='auto',
-                    device_map='auto',  # Disable automatic device mapping
+                    device_map=None,  # Disable automatic device mapping
                     trust_remote_code=True,
                     use_safetensors=True,
+                    low_cpu_mem_usage=True,  # Save memory during loading
                 )
 
             logger.info(f"Loading pretrained model: {self.hparams.model_name_or_path}")
