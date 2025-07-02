@@ -96,7 +96,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 return PEERGemmaForCausalLM.from_pretrained(
                     prebuild_path,
                     torch_dtype='auto',
-                    device_map=None,  # Disable automatic device mapping
+                    device_map='auto',  # Disable automatic device mapping
                     trust_remote_code=True,
                     use_safetensors=True,
                 )
@@ -107,7 +107,7 @@ class PEERGemmaLightningModule(pl.LightningModule):
                 self.hparams.model_name_or_path,
                 token=os.getenv("HF_TOKEN"),
                 torch_dtype='auto',
-                device_map=None,  # Disable automatic device mapping
+                device_map='auto',
                 trust_remote_code=True,
             )
 
