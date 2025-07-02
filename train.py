@@ -261,6 +261,8 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
     strategy = DDPStrategy(
         find_unused_parameters=False,
         gradient_as_bucket_view=True,
+        static_graph=True,
+
     ) if system.devices > 1 else "auto"
 
     # Create trainer
@@ -269,7 +271,7 @@ def train_task(model: ModelConfig, data: DataConfig, training: TrainingConfig,
         max_epochs=training.max_epochs,
         accelerator=system.accelerator,
         devices=system.devices,
-        strategy="deepspeed_stage_3",
+        strategy=strategy,
         precision=training.precision,
         gradient_clip_val=training.gradient_clip_val,
         accumulate_grad_batches=training.accumulate_grad_batches,
