@@ -9,4 +9,7 @@ c4_data = DataConfig(
     dataset_name="allenai/c4",
     dataset_config="en",
     tokenizer_name="google/gemma-2b",
+
+    streaming=True,
+    cache_dir=None
     )

@@ -8,5 +8,5 @@ nscc_system = SystemConfig(
     pin_memory=True,
     persistent_workers=True,
     use_mps=False,
-    compile_model=True,
+    compile_model=False,
 )
